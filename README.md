@@ -1,1 +1,1 @@
-# -amazon-connect-social-media-examples
+# amazon-connect-social-media-examples
