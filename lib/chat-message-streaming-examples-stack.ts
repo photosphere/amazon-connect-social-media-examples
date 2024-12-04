@@ -1,16 +1,16 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT-0
-import * as cdk from 'aws-cdk-lib';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
-import * as sns from 'aws-cdk-lib/aws-sns';
-import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as path from 'path';
-import * as apigw2 from 'aws-cdk-lib/aws-apigatewayv2';
-import * as apigw2i from 'aws-cdk-lib/aws-apigatewayv2-integrations';
-import { Duration } from 'aws-cdk-lib';
-import { Construct } from 'constructs';
+import * as cdk from "aws-cdk-lib";
+import * as lambda from "aws-cdk-lib/aws-lambda";
+import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+import * as sns from "aws-cdk-lib/aws-sns";
+import * as subscriptions from "aws-cdk-lib/aws-sns-subscriptions";
+import * as iam from "aws-cdk-lib/aws-iam";
+import * as path from "path";
+import * as apigw2 from "aws-cdk-lib/aws-apigatewayv2";
+import * as apigw2i from "aws-cdk-lib/aws-apigatewayv2-integrations";
+import { Duration } from "aws-cdk-lib";
+import { Construct } from "constructs";
 
 export class ChatMessageStreamingExamplesStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -27,59 +27,73 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
     const pinpointAppId = this.node.tryGetContext("pinpointAppId");
     const smsNumber = this.node.tryGetContext("smsNumber");
     const fbSecretArn = this.node.tryGetContext("fbSecretArn");
+    const inSecretArn = this.node.tryGetContext("inSecretArn");
     const waSecretArn = this.node.tryGetContext("waSecretArn");
     const piiRedactionTypes = this.node.tryGetContext("piiRedactionTypes");
     let enableFB = false;
     let enableWhatsApp = false;
+    let enableInstagram = false;
     let enableSMS = false;
     let enablePII = false;
 
-    // Validating that environment variables are present 
-    if(amazonConnectArn === undefined){
+    // Validating that environment variables are present
+    if (amazonConnectArn === undefined) {
       throw new Error("Missing amazonConnectArn in the context");
     }
 
-    if(contactFlowId === undefined){
+    if (contactFlowId === undefined) {
       throw new Error("Missing Amazon Connect Contact flow Id in the context");
     }
 
-    if(pinpointAppId === undefined && smsNumber === undefined){
+    if (pinpointAppId === undefined && smsNumber === undefined) {
       enableSMS = false;
-    } else if (pinpointAppId !== undefined && smsNumber === undefined){
+    } else if (pinpointAppId !== undefined && smsNumber === undefined) {
       throw new Error("Missing smsNumber in the context");
-    } else if (pinpointAppId === undefined && smsNumber !== undefined){
+    } else if (pinpointAppId === undefined && smsNumber !== undefined) {
       throw new Error("Missing pinpointAppId in the context");
     } else {
       enableSMS = true;
     }
 
-    if(fbSecretArn != undefined){
+    if (fbSecretArn != undefined) {
       enableFB = true;
     }
 
-    if(waSecretArn != undefined){
+    if (waSecretArn != undefined) {
       enableWhatsApp = true;
     }
 
-    if(piiRedactionTypes != undefined){
+    if (inSecretArn != undefined) {
+      enableInstagram = true;
+    }
+
+    if (piiRedactionTypes != undefined) {
       if (piiRedactionTypes) {
         enablePII = true;
       } else {
-        throw new Error("piiRedactionTypes cannot be empty, expecting comma separated values of AWS Comprehend PII types");
+        throw new Error(
+          "piiRedactionTypes cannot be empty, expecting comma separated values of AWS Comprehend PII types"
+        );
       }
     }
-  
 
-    if(enableWhatsApp === false && enableFB === false && enableSMS === false){
-      throw new Error("Please enable at least one channel, SMS, Facebook or WhatsApp. You can do so by providing fbSecretArn in the context to enable Facebook, waSecretArn in the context to enable WhatsApp or by providing  pinpointAppId and smsNumber to enable SMS channel");
+    if (
+      enableInstagram == false &&
+      enableWhatsApp === false &&
+      enableFB === false &&
+      enableSMS === false
+    ) {
+      throw new Error(
+        "Please enable at least one channel, SMS, Facebook, Instagram or WhatsApp. You can do so by providing fbSecretArn in the context to enable Facebook, waSecretArn in the context to enable WhatsApp or by providing  pinpointAppId and smsNumber to enable SMS channel"
+      );
     }
 
-    const debugLog = new cdk.CfnParameter(this, 'debugLog', {
-      allowedValues: ['true', 'false'],
-      default: 'false',
-      type: 'String',
+    const debugLog = new cdk.CfnParameter(this, "debugLog", {
+      allowedValues: ["true", "false"],
+      default: "false",
+      type: "String",
       description:
-        'Setting to enable debug level logging in lambda functions.  Recommended to turn this off in production.',
+        "Setting to enable debug level logging in lambda functions.  Recommended to turn this off in production.",
     });
 
     // pinpoint project will not be in cdk - phone number has to be manually claimed
@@ -88,12 +102,12 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
 
     // Dynamo DB table
 
-    const chatContactDdbTable = new dynamodb.Table(this, 'chatTable', {
+    const chatContactDdbTable = new dynamodb.Table(this, "chatTable", {
       partitionKey: {
-        name: 'contactId',
+        name: "contactId",
         type: dynamodb.AttributeType.STRING,
       },
-      timeToLiveAttribute: 'date',
+      timeToLiveAttribute: "date",
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -101,15 +115,15 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
     // Dynamo DB table GSI
     // vendorId is phone number or facebook user id
 
-    const vendorIdChannelIndexName = 'vendorId-index';
+    const vendorIdChannelIndexName = "vendorId-index";
     chatContactDdbTable.addGlobalSecondaryIndex({
       indexName: vendorIdChannelIndexName,
       partitionKey: {
-        name: 'vendorId',
+        name: "vendorId",
         type: dynamodb.AttributeType.STRING,
       },
       sortKey: {
-        name: 'channel',
+        name: "channel",
         type: dynamodb.AttributeType.STRING,
       },
     });
@@ -117,73 +131,77 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
     let smsOutboundMsgStreamingTopic;
     let smsOutboundMsgStreamingTopicStatement;
 
-    if(enableSMS){
+    if (enableSMS) {
       // outbound SNS topic
       smsOutboundMsgStreamingTopic = new sns.Topic(
         this,
-        'smsOutboundMsgStreamingTopic',
+        "smsOutboundMsgStreamingTopic",
         {}
       );
 
       smsOutboundMsgStreamingTopicStatement = new iam.PolicyStatement({
-        actions: [
-          'sns:Subscribe', 
-          'sns:Publish'
-        ],
-        principals: [new iam.ServicePrincipal('connect.amazonaws.com')],
+        actions: ["sns:Subscribe", "sns:Publish"],
+        principals: [new iam.ServicePrincipal("connect.amazonaws.com")],
         resources: [smsOutboundMsgStreamingTopic.topicArn],
       });
 
-      smsOutboundMsgStreamingTopic.addToResourcePolicy(smsOutboundMsgStreamingTopicStatement)
+      smsOutboundMsgStreamingTopic.addToResourcePolicy(
+        smsOutboundMsgStreamingTopicStatement
+      );
     }
-
 
     let digitalOutboundMsgStreamingTopic;
     let digitalOutboundMsgStreamingTopicStatement;
 
-    if(enableFB || enableWhatsApp){
+    if (enableFB || enableWhatsApp || enableInstagram) {
       digitalOutboundMsgStreamingTopic = new sns.Topic(
         this,
-        'digitalOutboundMsgStreamingTopic',
+        "digitalOutboundMsgStreamingTopic",
         {}
       );
-  
+
       digitalOutboundMsgStreamingTopicStatement = new iam.PolicyStatement({
-        actions: [
-          'sns:Subscribe',
-          'sns:Publish'
-        ],
-        principals: [new iam.ServicePrincipal('connect.amazonaws.com')],
+        actions: ["sns:Subscribe", "sns:Publish"],
+        principals: [new iam.ServicePrincipal("connect.amazonaws.com")],
         resources: [digitalOutboundMsgStreamingTopic.topicArn],
       });
-  
-      digitalOutboundMsgStreamingTopic.addToResourcePolicy(digitalOutboundMsgStreamingTopicStatement);
+
+      digitalOutboundMsgStreamingTopic.addToResourcePolicy(
+        digitalOutboundMsgStreamingTopicStatement
+      );
     }
-    
-    
+
     // Inbound Lambda function
     const inboundMessageFunction = new lambda.Function(
       this,
-      'inboundMessageFunction',
+      "inboundMessageFunction",
       {
         runtime: lambda.Runtime.NODEJS_18_X,
-        handler: 'index.handler',
+        handler: "index.handler",
         code: lambda.Code.fromAsset(
-          path.resolve(__dirname, '../src/lambda/inboundMessageHandler')
+          path.resolve(__dirname, "../src/lambda/inboundMessageHandler")
         ),
         timeout: Duration.seconds(120),
         memorySize: 512,
         environment: {
           FB_SECRET: fbSecretArn,
           WA_SECRET: waSecretArn,
+          IN_SECRET: inSecretArn,
           CONTACT_TABLE: chatContactDdbTable.tableName,
           AMAZON_CONNECT_ARN: amazonConnectArn,
           CONTACT_FLOW_ID: contactFlowId,
-          DIGITAL_OUTBOUND_SNS_TOPIC: (digitalOutboundMsgStreamingTopic !== undefined ? digitalOutboundMsgStreamingTopic.topicArn : "" ),
-          SMS_OUTBOUND_SNS_TOPIC: (smsOutboundMsgStreamingTopic !== undefined ? smsOutboundMsgStreamingTopic.topicArn : "" ),
+          DIGITAL_OUTBOUND_SNS_TOPIC:
+            digitalOutboundMsgStreamingTopic !== undefined
+              ? digitalOutboundMsgStreamingTopic.topicArn
+              : "",
+          SMS_OUTBOUND_SNS_TOPIC:
+            smsOutboundMsgStreamingTopic !== undefined
+              ? smsOutboundMsgStreamingTopic.topicArn
+              : "",
           VENDOR_ID_CHANNEL_INDEX_NAME: vendorIdChannelIndexName,
           DEBUG_LOG: debugLog.valueAsString,
-          PII_DETECTION_TYPES: (piiRedactionTypes !== undefined ? piiRedactionTypes : "" )
+          PII_DETECTION_TYPES:
+            piiRedactionTypes !== undefined ? piiRedactionTypes : "",
         },
       }
     );
@@ -191,51 +209,62 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
     // Inbound SNS topic (for SMS)
     let inboundSMSTopic: sns.Topic;
 
-    if(enableSMS){
-      inboundSMSTopic = new sns.Topic(this, 'InboundSMSTopic', {});  
+    if (enableSMS) {
+      inboundSMSTopic = new sns.Topic(this, "InboundSMSTopic", {});
       inboundSMSTopic.addSubscription(
         new subscriptions.LambdaSubscription(inboundMessageFunction)
       );
-      new cdk.CfnOutput(this, 'SmsInboundTopic', {
+      new cdk.CfnOutput(this, "SmsInboundTopic", {
         value: inboundSMSTopic.topicArn.toString(),
-      }); 
+      });
     }
 
-    if(enablePII){
+    if (enablePII) {
       inboundMessageFunction.addToRolePolicy(
         new iam.PolicyStatement({
-          actions: ['comprehend:DetectPiiEntities'],
-          resources: ['*'],
+          actions: ["comprehend:DetectPiiEntities"],
+          resources: ["*"],
           effect: iam.Effect.ALLOW,
         })
       );
     }
 
-    if(enableFB){
+    if (enableFB) {
       inboundMessageFunction.addToRolePolicy(
         new iam.PolicyStatement({
-          actions: ['secretsmanager:GetSecretValue'],
+          actions: ["secretsmanager:GetSecretValue"],
           resources: [fbSecretArn],
           effect: iam.Effect.ALLOW,
         })
       );
     }
-    if(enableWhatsApp){
+    if (enableWhatsApp) {
       inboundMessageFunction.addToRolePolicy(
         new iam.PolicyStatement({
-          actions: ['secretsmanager:GetSecretValue'],
+          actions: ["secretsmanager:GetSecretValue"],
           resources: [waSecretArn],
           effect: iam.Effect.ALLOW,
         })
       );
     }
 
+    if(enableInstagram){
+      inboundMessageFunction.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['secretsmanager:GetSecretValue'],
+          resources: [inSecretArn],
+          effect: iam.Effect.ALLOW,
+        })
+      );
+    }
 
     inboundMessageFunction.addToRolePolicy(
       new iam.PolicyStatement({
-        actions: ['connect:StartChatContact'],
+        actions: ["connect:StartChatContact"],
         resources: [
-          `${this.node.tryGetContext("amazonConnectArn")}/contact-flow/${this.node.tryGetContext("contactFlowId")}`,
+          `${this.node.tryGetContext(
+            "amazonConnectArn"
+          )}/contact-flow/${this.node.tryGetContext("contactFlowId")}`,
         ],
         effect: iam.Effect.ALLOW,
       })
@@ -243,7 +272,7 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
 
     inboundMessageFunction.addToRolePolicy(
       new iam.PolicyStatement({
-        actions: ['connect:StartContactStreaming'],
+        actions: ["connect:StartContactStreaming"],
         resources: [`${this.node.tryGetContext("amazonConnectArn")}/contact/*`],
         effect: iam.Effect.ALLOW,
       })
@@ -252,11 +281,11 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
     inboundMessageFunction.addToRolePolicy(
       new iam.PolicyStatement({
         actions: [
-          'dynamodb:PutItem',
-          'dynamodb:GetItem',
-          'dynamodb:Scan',
-          'dynamodb:Query',
-          'dynamodb:UpdateItem',
+          "dynamodb:PutItem",
+          "dynamodb:GetItem",
+          "dynamodb:Scan",
+          "dynamodb:Query",
+          "dynamodb:UpdateItem",
         ],
         resources: [
           chatContactDdbTable.tableArn,
@@ -270,12 +299,12 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
     // outbound Lambda function
     const outboundMessageFunction = new lambda.Function(
       this,
-      'outboundMessageFunction',
+      "outboundMessageFunction",
       {
         runtime: lambda.Runtime.NODEJS_18_X,
-        handler: 'index.handler',
+        handler: "index.handler",
         code: lambda.Code.fromAsset(
-          path.resolve(__dirname, '../src/lambda/outboundMessageHandler')
+          path.resolve(__dirname, "../src/lambda/outboundMessageHandler")
         ),
         timeout: Duration.seconds(60),
         memorySize: 512,
@@ -284,6 +313,7 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
           PINPOINT_APPLICATION_ID: pinpointAppId,
           FB_SECRET: fbSecretArn,
           WA_SECRET: waSecretArn,
+          IN_SECRET: inSecretArn,
           SMS_NUMBER: smsNumber,
           DEBUG_LOG: debugLog.valueAsString,
         },
@@ -292,28 +322,39 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
 
     outboundMessageFunction.addToRolePolicy(
       new iam.PolicyStatement({
-        actions: ['mobiletargeting:SendMessages'],
+        actions: ["mobiletargeting:SendMessages"],
         effect: iam.Effect.ALLOW,
         resources: [
-          `arn:aws:mobiletargeting:${this.region}:${this.account}:apps/${this.node.tryGetContext("pinpointAppId")}/messages`,
+          `arn:aws:mobiletargeting:${this.region}:${
+            this.account
+          }:apps/${this.node.tryGetContext("pinpointAppId")}/messages`,
         ],
       })
     );
 
-    if(enableFB){
+    if (enableFB) {
       outboundMessageFunction.addToRolePolicy(
         new iam.PolicyStatement({
-          actions: ['secretsmanager:GetSecretValue'],
+          actions: ["secretsmanager:GetSecretValue"],
           resources: [fbSecretArn],
           effect: iam.Effect.ALLOW,
         })
       );
     }
-    if(enableWhatsApp){
+    if (enableWhatsApp) {
+      outboundMessageFunction.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ["secretsmanager:GetSecretValue"],
+          resources: [waSecretArn],
+          effect: iam.Effect.ALLOW,
+        })
+      );
+    }
+    if(enableInstagram){
       outboundMessageFunction.addToRolePolicy(
         new iam.PolicyStatement({
           actions: ['secretsmanager:GetSecretValue'],
-          resources: [waSecretArn],
+          resources: [inSecretArn],
           effect: iam.Effect.ALLOW,
         })
       );
@@ -321,7 +362,7 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
 
     outboundMessageFunction.addToRolePolicy(
       new iam.PolicyStatement({
-        actions: ['dynamodb:GetItem', 'dynamodb:DeleteItem'],
+        actions: ["dynamodb:GetItem", "dynamodb:DeleteItem"],
         resources: [
           chatContactDdbTable.tableArn,
           `${chatContactDdbTable.tableArn}/index/${vendorIdChannelIndexName}`,
@@ -336,118 +377,143 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
     let digitalChannelHealthCheckIntegration: apigw2i.HttpLambdaIntegration;
     let digitalChannelApi;
 
-    if(enableFB || enableWhatsApp){
-      healthCheckFunction = new lambda.Function(
-        this,
-        'healthCheckFunction',
-        {
-          runtime: lambda.Runtime.NODEJS_18_X,
-          handler: 'index.handler',
-          code: lambda.Code.fromAsset(
-            path.resolve(__dirname, '../src/lambda/digitalChannelHealthCheck')
-          ),
-          environment: {
-            DEBUG_LOG: debugLog.valueAsString,
-            FB_SECRET: fbSecretArn,
-            WA_SECRET: waSecretArn,
-          },
-        }
-      );
-      if(enableFB){
+    if (enableFB || enableWhatsApp || enableInstagram) {
+      healthCheckFunction = new lambda.Function(this, "healthCheckFunction", {
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: "index.handler",
+        code: lambda.Code.fromAsset(
+          path.resolve(__dirname, "../src/lambda/digitalChannelHealthCheck")
+        ),
+        environment: {
+          DEBUG_LOG: debugLog.valueAsString,
+          FB_SECRET: fbSecretArn,
+          WA_SECRET: waSecretArn,
+          IN_SECRET: inSecretArn,
+        },
+      });
+      if (enableFB) {
         healthCheckFunction.addToRolePolicy(
           new iam.PolicyStatement({
-            actions: ['secretsmanager:GetSecretValue'],
+            actions: ["secretsmanager:GetSecretValue"],
             resources: [fbSecretArn],
             effect: iam.Effect.ALLOW,
           })
         );
       }
-      if(enableWhatsApp){
+      if (enableWhatsApp) {
+        healthCheckFunction.addToRolePolicy(
+          new iam.PolicyStatement({
+            actions: ["secretsmanager:GetSecretValue"],
+            resources: [waSecretArn],
+            effect: iam.Effect.ALLOW,
+          })
+        );
+      }
+      if(enableInstagram){
         healthCheckFunction.addToRolePolicy(
           new iam.PolicyStatement({
             actions: ['secretsmanager:GetSecretValue'],
-            resources: [waSecretArn],
+            resources: [inSecretArn],
             effect: iam.Effect.ALLOW,
           })
         );
       }
       // inbound API Gateway (digital channel)
       digitalChannelMessageIntegration = new apigw2i.HttpLambdaIntegration(
-        'inboundMessageFunction', inboundMessageFunction);
-      
+        "inboundMessageFunction",
+        inboundMessageFunction
+      );
+
       // digitalChannelHealthCheckIntegration = new apigw2i.HttpLambdaIntegration({
       digitalChannelHealthCheckIntegration = new apigw2i.HttpLambdaIntegration(
-        'healthCheckFunction', healthCheckFunction);
+        "healthCheckFunction",
+        healthCheckFunction
+      );
 
-      digitalChannelApi = new apigw2.HttpApi(this, 'digitalChannelApi', {
+      digitalChannelApi = new apigw2.HttpApi(this, "digitalChannelApi", {
         corsPreflight: {
-          allowOrigins: ['*'],
+          allowOrigins: ["*"],
           allowMethods: [
             apigw2.CorsHttpMethod.OPTIONS,
             apigw2.CorsHttpMethod.POST,
             apigw2.CorsHttpMethod.GET,
           ],
-          allowHeaders: ['Content-Type'],
+          allowHeaders: ["Content-Type"],
         },
       });
-      if(enableFB){
+      if (enableFB) {
         digitalChannelApi.addRoutes({
-          path: '/webhook/facebook',
+          path: "/webhook/facebook",
           methods: [apigw2.HttpMethod.POST],
           integration: digitalChannelMessageIntegration,
         });
         digitalChannelApi.addRoutes({
-          path: '/webhook/facebook',
+          path: "/webhook/facebook",
           methods: [apigw2.HttpMethod.GET],
           integration: digitalChannelHealthCheckIntegration,
         });
-        new cdk.CfnOutput(this, 'FacebookApiGatewayWebhook', {
-          value: digitalChannelApi.apiEndpoint.toString() + '/webhook/facebook',
+        new cdk.CfnOutput(this, "FacebookApiGatewayWebhook", {
+          value: digitalChannelApi.apiEndpoint.toString() + "/webhook/facebook",
         });
       }
 
-      if(enableWhatsApp){
+      if (enableWhatsApp) {
         digitalChannelApi.addRoutes({
-          path: '/webhook/whatsapp',
+          path: "/webhook/whatsapp",
           methods: [apigw2.HttpMethod.POST],
           integration: digitalChannelMessageIntegration,
         });
         digitalChannelApi.addRoutes({
-          path: '/webhook/whatsapp',
+          path: "/webhook/whatsapp",
           methods: [apigw2.HttpMethod.GET],
           integration: digitalChannelHealthCheckIntegration,
         });
-        new cdk.CfnOutput(this, 'WhatsAppApiGatewayWebhook', {
-          value: digitalChannelApi.apiEndpoint.toString() + '/webhook/whatsapp',
+        new cdk.CfnOutput(this, "WhatsAppApiGatewayWebhook", {
+          value: digitalChannelApi.apiEndpoint.toString() + "/webhook/whatsapp",
+        });
+      }
+
+      if(enableInstagram){
+        digitalChannelApi.addRoutes({
+          path: '/webhook/instagram',
+          methods: [apigw2.HttpMethod.POST],
+          integration: digitalChannelMessageIntegration,
+        });
+        digitalChannelApi.addRoutes({
+          path: '/webhook/instagram',
+          methods: [apigw2.HttpMethod.GET],
+          integration: digitalChannelHealthCheckIntegration,
+        });
+        new cdk.CfnOutput(this, 'InstagramApiGatewayWebhook', {
+          value: digitalChannelApi.apiEndpoint.toString() + '/webhook/instagram',
         });
       }
 
       // Outbound lambda subscribe to streaming topic
-      if(digitalOutboundMsgStreamingTopic){
+      if (digitalOutboundMsgStreamingTopic) {
         digitalOutboundMsgStreamingTopic.addSubscription(
           new subscriptions.LambdaSubscription(outboundMessageFunction, {
             filterPolicy: {
               MessageVisibility: sns.SubscriptionFilter.stringFilter({
-                    allowlist: ['CUSTOMER', 'ALL'],
-                }),
-            }
+                allowlist: ["CUSTOMER", "ALL"],
+              }),
+            },
           })
         );
       }
     }
 
-    if(smsOutboundMsgStreamingTopic){
+    if (smsOutboundMsgStreamingTopic) {
       smsOutboundMsgStreamingTopic.addSubscription(
         new subscriptions.LambdaSubscription(outboundMessageFunction, {
           filterPolicy: {
             MessageVisibility: sns.SubscriptionFilter.stringFilter({
-                  allowlist: ['CUSTOMER', 'ALL'],
-              }),
-          }
+              allowlist: ["CUSTOMER", "ALL"],
+            }),
+          },
         })
-      ); 
+      );
     }
-
   }
 }
 

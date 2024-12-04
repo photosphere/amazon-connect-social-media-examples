@@ -1,28 +1,30 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: MIT-0
 
-const AWS = require('aws-sdk');
-const { log } = require('common-util');
-const sms = require('./lib/handlers/sms');
-const fb = require('./lib/handlers/facebook');
-const wa = require('./lib/handlers/whatsapp');
-const { lookupContactId, deleteRecord } = require('./lib/outboundHelper');
-const SMS_CHANNEL_TYPE = 'SMS';
-const FB_CHANNEL_TYPE = 'FACEBOOK';
-const WA_CHANNEL_TYPE = 'WHATSAPP';
-const CUSTOMER_ROLE = 'CUSTOMER';
+const AWS = require("aws-sdk");
+const { log } = require("common-util");
+const sms = require("./lib/handlers/sms");
+const fb = require("./lib/handlers/facebook");
+const wa = require("./lib/handlers/whatsapp");
+const ins = require("./lib/handlers/instagram");
+const { lookupContactId, deleteRecord } = require("./lib/outboundHelper");
+const SMS_CHANNEL_TYPE = "SMS";
+const FB_CHANNEL_TYPE = "FACEBOOK";
+const WA_CHANNEL_TYPE = "WHATSAPP";
+const IN_CHANNEL_TYPE = "INSTAGRAM";
+const CUSTOMER_ROLE = "CUSTOMER";
 const PARTICIPANT_LEFT_CONTENT_TYPE =
-  'application/vnd.amazonaws.connect.event.participant.left';
+  "application/vnd.amazonaws.connect.event.participant.left";
 const CHAT_ENDED_CONTENT_TYPE =
-  'application/vnd.amazonaws.connect.event.chat.ended';
-const CUSTOMER = 'CUSTOMER';
-const ALL = 'ALL';
+  "application/vnd.amazonaws.connect.event.chat.ended";
+const CUSTOMER = "CUSTOMER";
+const ALL = "ALL";
 
 exports.handler = async (event) => {
-  log.debug('Event', event);
+  log.debug("Event", event);
 
   if (event.Records === undefined) {
-    const errorText = 'Unsupported event type. event.Records not defined.';
+    const errorText = "Unsupported event type. event.Records not defined.";
     log.error(errorText);
     throw new Error(errorText);
   }
@@ -60,9 +62,9 @@ exports.handler = async (event) => {
 };
 
 const validateRecord = (record) => {
-  if (record.EventSource !== 'aws:sns') {
+  if (record.EventSource !== "aws:sns") {
     log.warn(
-      'Unsuported event source for record.  Record will not be processed.',
+      "Unsuported event source for record.  Record will not be processed.",
       record
     );
     return false;
@@ -72,12 +74,13 @@ const validateRecord = (record) => {
   if (
     (record.Sns.MessageAttributes.ParticipantRole === undefined ||
       record.Sns.MessageAttributes.ParticipantRole.Value === CUSTOMER_ROLE) &&
-    record.Sns.MessageAttributes.ContentType.Value !== CHAT_ENDED_CONTENT_TYPE &&
-    ((record.Sns.MessageAttributes.MessageVisibility.Value == CUSTOMER || 
-      record.Sns.MessageAttributes.MessageVisibility.Value == ALL) && 
-      record.Sns.MessageAttributes.MessageVisibility.Value != CUSTOMER)
+    record.Sns.MessageAttributes.ContentType.Value !==
+      CHAT_ENDED_CONTENT_TYPE &&
+    (record.Sns.MessageAttributes.MessageVisibility.Value == CUSTOMER ||
+      record.Sns.MessageAttributes.MessageVisibility.Value == ALL) &&
+    record.Sns.MessageAttributes.MessageVisibility.Value != CUSTOMER
   ) {
-    log.debug('Customer event.  Ignoring.');
+    log.debug("Customer event.  Ignoring.");
     return false;
   }
 
@@ -87,7 +90,7 @@ const validateRecord = (record) => {
     record.Sns.MessageAttributes.ContentType.Value ===
       PARTICIPANT_LEFT_CONTENT_TYPE
   ) {
-    log.debug('Agent leaving conversation event.  Ignoring.');
+    log.debug("Agent leaving conversation event.  Ignoring.");
     return false;
   }
 
@@ -104,6 +107,9 @@ const handleMessage = async (record, recordLookup) => {
       break;
     case WA_CHANNEL_TYPE:
       await wa.handler(recordLookup.vendorId, JSON.parse(record.Sns.Message));
+      break;
+    case IN_CHANNEL_TYPE:
+      await ins.handler(recordLookup.vendorId, JSON.parse(record.Sns.Message));
       break;
     default:
       log.error(`Unsupported channel type: ${recordLookup.channel}`);
