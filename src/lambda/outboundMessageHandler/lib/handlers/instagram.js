@@ -80,7 +80,7 @@ const sendMessage = async (facebookId, message) => {
 };
 
 const getInstagramSecrets = async () => {
-  if (process.env.FB_SECRET) {
+  if (process.env.IN_SECRET) {
     const params = {
       SecretId: process.env.IN_SECRET,
     };
