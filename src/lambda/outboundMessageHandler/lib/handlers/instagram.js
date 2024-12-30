@@ -42,7 +42,7 @@ const sendMessage = async (facebookId, message) => {
     .digest("hex");
   const options = {
     host: "graph.facebook.com",
-    path: `${PATH}?access_token=${pageToken}&appsecret_proof=${appsecret_proof}`,
+    path: `${PATH}?access_token=${pageToken}`,
     method: "POST",
     headers: { "Content-Type": "application/json" },
   };
