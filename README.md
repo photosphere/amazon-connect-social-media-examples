@@ -38,6 +38,7 @@ cdk deploy \
 --context amazonConnectArn=<YOUR INSTANCE ARN> \
 --context contactFlowId=<YOUR CONTACT FLOW ID>  \
 --context fbSecretArn=<YOUR FB SECRET ARN>
+--context stackId=ChatMessageStreamingForFacebook
 ```
 
 
@@ -48,6 +49,26 @@ cdk deploy \
 --context contactFlowId=<YOUR CONTACT FLOW ID>  \
 --context fbSecretArn=<YOUR FB SECRET ARN> \
 --context piiRedactionTypes="<CSV LIST OF AMAZON COMPREHEND PII ENTITY TYPES, EX: PIN, CREDIT_DEBIT_NUMBER>"
+--context stackId=ChatMessageStreamingForFacebookPII
 ```
 
+### Deploy Ins Channel only
 
+```bash
+cdk deploy \
+--context amazonConnectArn=<YOUR INSTANCE ARN> \
+--context contactFlowId=<YOUR CONTACT FLOW ID>  \
+--context inSecretArn=<YOUR INS SECRET ARN> \
+--context stackId=ChatMessageStreamingForInstagram
+```
+
+### Deploy FB and Ins Channel
+
+```bash
+cdk deploy \
+--context amazonConnectArn=<YOUR INSTANCE ARN> \
+--context contactFlowId=<YOUR CONTACT FLOW ID>  \
+--context fbSecretArn=<YOUR FB SECRET ARN> \
+--context inSecretArn=<YOUR INS SECRET ARN> \
+--context stackId=ChatMessageStreamingForSocialMedia
+```
