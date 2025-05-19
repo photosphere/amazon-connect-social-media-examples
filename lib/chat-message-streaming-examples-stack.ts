@@ -29,10 +29,12 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
     const fbSecretArn = this.node.tryGetContext("fbSecretArn");
     const inSecretArn = this.node.tryGetContext("inSecretArn");
     const waSecretArn = this.node.tryGetContext("waSecretArn");
+    const zaloSecretArn = this.node.tryGetContext("zaloSecretArn");
     const piiRedactionTypes = this.node.tryGetContext("piiRedactionTypes");
     let enableFB = false;
     let enableWhatsApp = false;
     let enableInstagram = false;
+    let enableZalo = false;
     let enableSMS = false;
     let enablePII = false;
 
@@ -67,6 +69,10 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
       enableInstagram = true;
     }
 
+    if (zaloSecretArn != undefined) {
+      enableZalo = true;
+    }
+
     if (piiRedactionTypes != undefined) {
       if (piiRedactionTypes) {
         enablePII = true;
@@ -81,10 +87,11 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
       enableInstagram == false &&
       enableWhatsApp === false &&
       enableFB === false &&
+      enableZalo === false &&
       enableSMS === false
     ) {
       throw new Error(
-        "Please enable at least one channel, SMS, Facebook, Instagram or WhatsApp. You can do so by providing fbSecretArn in the context to enable Facebook, waSecretArn in the context to enable WhatsApp or by providing  pinpointAppId and smsNumber to enable SMS channel"
+        "Please enable at least one channel, SMS, Facebook, Instagram, WhatsApp, or Zalo. You can do so by providing fbSecretArn in the context to enable Facebook, waSecretArn in the context to enable WhatsApp, zaloSecretArn in the context to enable Zalo, or by providing pinpointAppId and smsNumber to enable SMS channel"
       );
     }
 
@@ -153,7 +160,7 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
     let digitalOutboundMsgStreamingTopic;
     let digitalOutboundMsgStreamingTopicStatement;
 
-    if (enableFB || enableWhatsApp || enableInstagram) {
+    if (enableFB || enableWhatsApp || enableInstagram || enableZalo) {
       digitalOutboundMsgStreamingTopic = new sns.Topic(
         this,
         "digitalOutboundMsgStreamingTopic",
@@ -187,6 +194,7 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
           FB_SECRET: fbSecretArn,
           WA_SECRET: waSecretArn,
           IN_SECRET: inSecretArn,
+          ZALO_SECRET: zaloSecretArn,
           CONTACT_TABLE: chatContactDdbTable.tableName,
           AMAZON_CONNECT_ARN: amazonConnectArn,
           CONTACT_FLOW_ID: contactFlowId,
@@ -258,6 +266,16 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
       );
     }
 
+    if(enableZalo){
+      inboundMessageFunction.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['secretsmanager:GetSecretValue'],
+          resources: [zaloSecretArn],
+          effect: iam.Effect.ALLOW,
+        })
+      );
+    }
+
     inboundMessageFunction.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["connect:StartChatContact"],
@@ -314,6 +332,7 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
           FB_SECRET: fbSecretArn,
           WA_SECRET: waSecretArn,
           IN_SECRET: inSecretArn,
+          ZALO_SECRET: zaloSecretArn,
           SMS_NUMBER: smsNumber,
           DEBUG_LOG: debugLog.valueAsString,
         },
@@ -360,6 +379,16 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
       );
     }
 
+    if(enableZalo){
+      outboundMessageFunction.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['secretsmanager:GetSecretValue'],
+          resources: [zaloSecretArn],
+          effect: iam.Effect.ALLOW,
+        })
+      );
+    }
+
     outboundMessageFunction.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["dynamodb:GetItem", "dynamodb:DeleteItem"],
@@ -377,7 +406,7 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
     let digitalChannelHealthCheckIntegration: apigw2i.HttpLambdaIntegration;
     let digitalChannelApi;
 
-    if (enableFB || enableWhatsApp || enableInstagram) {
+    if (enableFB || enableWhatsApp || enableInstagram || enableZalo) {
       healthCheckFunction = new lambda.Function(this, "healthCheckFunction", {
         runtime: lambda.Runtime.NODEJS_18_X,
         handler: "index.handler",
@@ -389,6 +418,7 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
           FB_SECRET: fbSecretArn,
           WA_SECRET: waSecretArn,
           IN_SECRET: inSecretArn,
+          ZALO_SECRET: zaloSecretArn,
         },
       });
       if (enableFB) {
@@ -414,6 +444,16 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
           new iam.PolicyStatement({
             actions: ['secretsmanager:GetSecretValue'],
             resources: [inSecretArn],
+            effect: iam.Effect.ALLOW,
+          })
+        );
+      }
+
+      if(enableZalo){
+        healthCheckFunction.addToRolePolicy(
+          new iam.PolicyStatement({
+            actions: ['secretsmanager:GetSecretValue'],
+            resources: [zaloSecretArn],
             effect: iam.Effect.ALLOW,
           })
         );
@@ -486,6 +526,22 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
         });
         new cdk.CfnOutput(this, 'InstagramApiGatewayWebhook', {
           value: digitalChannelApi.apiEndpoint.toString() + '/webhook/instagram',
+        });
+      }
+
+      if(enableZalo){
+        digitalChannelApi.addRoutes({
+          path: '/webhook/zalo',
+          methods: [apigw2.HttpMethod.POST],
+          integration: digitalChannelMessageIntegration,
+        });
+        digitalChannelApi.addRoutes({
+          path: '/webhook/zalo',
+          methods: [apigw2.HttpMethod.GET],
+          integration: digitalChannelHealthCheckIntegration,
+        });
+        new cdk.CfnOutput(this, 'ZaloApiGatewayWebhook', {
+          value: digitalChannelApi.apiEndpoint.toString() + '/webhook/zalo',
         });
       }
 

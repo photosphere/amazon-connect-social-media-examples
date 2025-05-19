@@ -7,11 +7,13 @@ const sms = require("./lib/handlers/sms");
 const fb = require("./lib/handlers/facebook");
 const wa = require("./lib/handlers/whatsapp");
 const ins = require("./lib/handlers/instagram");
+const zalo = require("./lib/handlers/zalo");
 const { lookupContactId, deleteRecord } = require("./lib/outboundHelper");
 const SMS_CHANNEL_TYPE = "SMS";
 const FB_CHANNEL_TYPE = "FACEBOOK";
 const WA_CHANNEL_TYPE = "WHATSAPP";
 const IN_CHANNEL_TYPE = "INSTAGRAM";
+const ZALO_CHANNEL_TYPE = "ZALO";
 const CUSTOMER_ROLE = "CUSTOMER";
 const PARTICIPANT_LEFT_CONTENT_TYPE =
   "application/vnd.amazonaws.connect.event.participant.left";
@@ -110,6 +112,9 @@ const handleMessage = async (record, recordLookup) => {
       break;
     case IN_CHANNEL_TYPE:
       await ins.handler(recordLookup.vendorId, JSON.parse(record.Sns.Message));
+      break;
+    case ZALO_CHANNEL_TYPE:
+      await zalo.handler(recordLookup.vendorId, JSON.parse(record.Sns.Message));
       break;
     default:
       log.error(`Unsupported channel type: ${recordLookup.channel}`);

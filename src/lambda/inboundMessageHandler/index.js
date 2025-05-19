@@ -6,6 +6,7 @@ const sms = require("./lib/handlers/sms");
 const fb = require("./lib/handlers/facebook");
 const wa = require("./lib/handlers/whatsapp");
 const ins = require("./lib/handlers/instagram");
+const zalo = require("./lib/handlers/zalo");
 
 exports.handler = async (event) => {
   log.debug("Event", event);
@@ -65,6 +66,19 @@ const processDigitalChannelRequest = async (event) => {
       }
       log.debug("Process event body");
       await ins.handler(event.body);
+      break;
+    case "/webhook/zalo":
+      log.debug("Zalo channel detected.");
+      validRequest = await zalo.validateRequest(event);
+      if (!validRequest) {
+        log.warn("Invalid payload signature");
+        return {
+          statusCode: 403,
+          body: "Request validation failed",
+        };
+      }
+      log.debug("Process event body");
+      await zalo.handler(event.body);
       break;
     default:
       log.warn(

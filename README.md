@@ -62,6 +62,16 @@ cdk deploy \
 --context stackId=<YOUR STACK NANME>
 ```
 
+### Deploy Zalo Channel only
+
+```bash
+cdk deploy \
+--context amazonConnectArn=<YOUR INSTANCE ARN> \
+--context contactFlowId=<YOUR CONTACT FLOW ID>  \
+--context zaloSecretArn=<YOUR ZALO SECRET ARN> \
+--context stackId=<YOUR STACK NANME>
+```
+
 ### Deploy FB and Ins Channel
 
 ```bash
@@ -70,5 +80,17 @@ cdk deploy \
 --context contactFlowId=<YOUR CONTACT FLOW ID>  \
 --context fbSecretArn=<YOUR FB SECRET ARN> \
 --context inSecretArn=<YOUR INS SECRET ARN> \
+--context stackId=<YOUR STACK NANME>
+```
+
+### Deploy with Multiple Channels (FB, Ins, Zalo)
+
+```bash
+cdk deploy \
+--context amazonConnectArn=<YOUR INSTANCE ARN> \
+--context contactFlowId=<YOUR CONTACT FLOW ID>  \
+--context fbSecretArn=<YOUR FB SECRET ARN> \
+--context inSecretArn=<YOUR INS SECRET ARN> \
+--context zaloSecretArn=<YOUR ZALO SECRET ARN> \
 --context stackId=<YOUR STACK NANME>
 ```
