@@ -30,11 +30,13 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
     const inSecretArn = this.node.tryGetContext("inSecretArn");
     const waSecretArn = this.node.tryGetContext("waSecretArn");
     const zaloSecretArn = this.node.tryGetContext("zaloSecretArn");
+    const wechatSecretArn = this.node.tryGetContext("wechatSecretArn");
     const piiRedactionTypes = this.node.tryGetContext("piiRedactionTypes");
     let enableFB = false;
     let enableWhatsApp = false;
     let enableInstagram = false;
     let enableZalo = false;
+    let enableWeChat = false;
     let enableSMS = false;
     let enablePII = false;
 
@@ -73,6 +75,10 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
       enableZalo = true;
     }
 
+    if (wechatSecretArn != undefined) {
+      enableWeChat = true;
+    }
+
     if (piiRedactionTypes != undefined) {
       if (piiRedactionTypes) {
         enablePII = true;
@@ -88,10 +94,11 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
       enableWhatsApp === false &&
       enableFB === false &&
       enableZalo === false &&
+      enableWeChat === false &&
       enableSMS === false
     ) {
       throw new Error(
-        "Please enable at least one channel, SMS, Facebook, Instagram, WhatsApp, or Zalo. You can do so by providing fbSecretArn in the context to enable Facebook, waSecretArn in the context to enable WhatsApp, zaloSecretArn in the context to enable Zalo, or by providing pinpointAppId and smsNumber to enable SMS channel"
+        "Please enable at least one channel, SMS, Facebook, Instagram, WhatsApp, Zalo, or WeChat. You can do so by providing fbSecretArn in the context to enable Facebook, waSecretArn in the context to enable WhatsApp, zaloSecretArn in the context to enable Zalo, wechatSecretArn in the context to enable WeChat, or by providing pinpointAppId and smsNumber to enable SMS channel"
       );
     }
 
@@ -160,7 +167,7 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
     let digitalOutboundMsgStreamingTopic;
     let digitalOutboundMsgStreamingTopicStatement;
 
-    if (enableFB || enableWhatsApp || enableInstagram || enableZalo) {
+    if (enableFB || enableWhatsApp || enableInstagram || enableZalo || enableWeChat) {
       digitalOutboundMsgStreamingTopic = new sns.Topic(
         this,
         "digitalOutboundMsgStreamingTopic",
@@ -195,6 +202,7 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
           WA_SECRET: waSecretArn,
           IN_SECRET: inSecretArn,
           ZALO_SECRET: zaloSecretArn,
+          WECHAT_SECRET: wechatSecretArn,
           CONTACT_TABLE: chatContactDdbTable.tableName,
           AMAZON_CONNECT_ARN: amazonConnectArn,
           CONTACT_FLOW_ID: contactFlowId,
@@ -276,6 +284,16 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
       );
     }
 
+    if(enableWeChat){
+      inboundMessageFunction.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['secretsmanager:GetSecretValue'],
+          resources: [wechatSecretArn],
+          effect: iam.Effect.ALLOW,
+        })
+      );
+    }
+
     inboundMessageFunction.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["connect:StartChatContact"],
@@ -333,6 +351,7 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
           WA_SECRET: waSecretArn,
           IN_SECRET: inSecretArn,
           ZALO_SECRET: zaloSecretArn,
+          WECHAT_SECRET: wechatSecretArn,
           SMS_NUMBER: smsNumber,
           DEBUG_LOG: debugLog.valueAsString,
         },
@@ -389,6 +408,16 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
       );
     }
 
+    if(enableWeChat){
+      outboundMessageFunction.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['secretsmanager:GetSecretValue'],
+          resources: [wechatSecretArn],
+          effect: iam.Effect.ALLOW,
+        })
+      );
+    }
+
     outboundMessageFunction.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["dynamodb:GetItem", "dynamodb:DeleteItem"],
@@ -406,7 +435,7 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
     let digitalChannelHealthCheckIntegration: apigw2i.HttpLambdaIntegration;
     let digitalChannelApi;
 
-    if (enableFB || enableWhatsApp || enableInstagram || enableZalo) {
+    if (enableFB || enableWhatsApp || enableInstagram || enableZalo || enableWeChat) {
       healthCheckFunction = new lambda.Function(this, "healthCheckFunction", {
         runtime: lambda.Runtime.NODEJS_18_X,
         handler: "index.handler",
@@ -419,6 +448,7 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
           WA_SECRET: waSecretArn,
           IN_SECRET: inSecretArn,
           ZALO_SECRET: zaloSecretArn,
+          WECHAT_SECRET: wechatSecretArn,
         },
       });
       if (enableFB) {
@@ -454,6 +484,16 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
           new iam.PolicyStatement({
             actions: ['secretsmanager:GetSecretValue'],
             resources: [zaloSecretArn],
+            effect: iam.Effect.ALLOW,
+          })
+        );
+      }
+
+      if(enableWeChat){
+        healthCheckFunction.addToRolePolicy(
+          new iam.PolicyStatement({
+            actions: ['secretsmanager:GetSecretValue'],
+            resources: [wechatSecretArn],
             effect: iam.Effect.ALLOW,
           })
         );
@@ -542,6 +582,22 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
         });
         new cdk.CfnOutput(this, 'ZaloApiGatewayWebhook', {
           value: digitalChannelApi.apiEndpoint.toString() + '/webhook/zalo',
+        });
+      }
+
+      if(enableWeChat){
+        digitalChannelApi.addRoutes({
+          path: '/webhook/wechat',
+          methods: [apigw2.HttpMethod.POST],
+          integration: digitalChannelMessageIntegration,
+        });
+        digitalChannelApi.addRoutes({
+          path: '/webhook/wechat',
+          methods: [apigw2.HttpMethod.GET],
+          integration: digitalChannelHealthCheckIntegration,
+        });
+        new cdk.CfnOutput(this, 'WeChatApiGatewayWebhook', {
+          value: digitalChannelApi.apiEndpoint.toString() + '/webhook/wechat',
         });
       }
 
