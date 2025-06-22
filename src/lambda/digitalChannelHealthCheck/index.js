@@ -5,6 +5,7 @@ const fb = require("./lib/facebook");
 const wa = require("./lib/whatsapp");
 const ins = require("./lib/instagram");
 const zalo = require("./lib/zalo");
+const wechat = require("./lib/wechat");
 
 exports.handler = async (event) => {
   log.debug("Event", event);
@@ -22,6 +23,9 @@ exports.handler = async (event) => {
     case "/webhook/zalo":
       log.debug("Zalo channel detected.");
       return await zalo.handler(event);
+    case "/webhook/wechat":
+      log.debug("WeChat channel detected.");
+      return await wechat.handler(event);
     default:
       log.warn(
         `Request path "${event.rawPath}" does not match any expected paths.`
