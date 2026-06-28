@@ -8,6 +8,7 @@ const wa = require("./lib/handlers/whatsapp");
 const ins = require("./lib/handlers/instagram");
 const zalo = require("./lib/handlers/zalo");
 const wechat = require("./lib/handlers/wechat");
+const reddit = require("./lib/handlers/reddit");
 
 exports.handler = async (event) => {
   log.debug("Event", event);
@@ -93,6 +94,19 @@ const processDigitalChannelRequest = async (event) => {
       }
       log.debug("Process event body");
       await wechat.handler(event.body);
+      break;
+    case "/webhook/reddit":
+      log.debug("Reddit channel detected.");
+      validRequest = await reddit.validateRequest(event);
+      if (!validRequest) {
+        log.warn("Invalid payload signature");
+        return {
+          statusCode: 403,
+          body: "Request validation failed",
+        };
+      }
+      log.debug("Process event body");
+      await reddit.handler(event.body);
       break;
     default:
       log.warn(
