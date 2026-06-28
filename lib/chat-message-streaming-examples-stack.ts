@@ -31,12 +31,14 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
     const waSecretArn = this.node.tryGetContext("waSecretArn");
     const zaloSecretArn = this.node.tryGetContext("zaloSecretArn");
     const wechatSecretArn = this.node.tryGetContext("wechatSecretArn");
+    const redditSecretArn = this.node.tryGetContext("redditSecretArn");
     const piiRedactionTypes = this.node.tryGetContext("piiRedactionTypes");
     let enableFB = false;
     let enableWhatsApp = false;
     let enableInstagram = false;
     let enableZalo = false;
     let enableWeChat = false;
+    let enableReddit = false;
     let enableSMS = false;
     let enablePII = false;
 
@@ -79,6 +81,10 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
       enableWeChat = true;
     }
 
+    if (redditSecretArn != undefined) {
+      enableReddit = true;
+    }
+
     if (piiRedactionTypes != undefined) {
       if (piiRedactionTypes) {
         enablePII = true;
@@ -95,10 +101,11 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
       enableFB === false &&
       enableZalo === false &&
       enableWeChat === false &&
+      enableReddit === false &&
       enableSMS === false
     ) {
       throw new Error(
-        "Please enable at least one channel, SMS, Facebook, Instagram, WhatsApp, Zalo, or WeChat. You can do so by providing fbSecretArn in the context to enable Facebook, waSecretArn in the context to enable WhatsApp, zaloSecretArn in the context to enable Zalo, wechatSecretArn in the context to enable WeChat, or by providing pinpointAppId and smsNumber to enable SMS channel"
+        "Please enable at least one channel, SMS, Facebook, Instagram, WhatsApp, Zalo, WeChat, or Reddit. You can do so by providing fbSecretArn in the context to enable Facebook, waSecretArn in the context to enable WhatsApp, zaloSecretArn in the context to enable Zalo, wechatSecretArn in the context to enable WeChat, redditSecretArn in the context to enable Reddit, or by providing pinpointAppId and smsNumber to enable SMS channel"
       );
     }
 
@@ -167,7 +174,7 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
     let digitalOutboundMsgStreamingTopic;
     let digitalOutboundMsgStreamingTopicStatement;
 
-    if (enableFB || enableWhatsApp || enableInstagram || enableZalo || enableWeChat) {
+    if (enableFB || enableWhatsApp || enableInstagram || enableZalo || enableWeChat || enableReddit) {
       digitalOutboundMsgStreamingTopic = new sns.Topic(
         this,
         "digitalOutboundMsgStreamingTopic",
@@ -203,6 +210,7 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
           IN_SECRET: inSecretArn,
           ZALO_SECRET: zaloSecretArn,
           WECHAT_SECRET: wechatSecretArn,
+          REDDIT_SECRET: redditSecretArn,
           CONTACT_TABLE: chatContactDdbTable.tableName,
           AMAZON_CONNECT_ARN: amazonConnectArn,
           CONTACT_FLOW_ID: contactFlowId,
@@ -294,6 +302,16 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
       );
     }
 
+    if(enableReddit){
+      inboundMessageFunction.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['secretsmanager:GetSecretValue'],
+          resources: [redditSecretArn],
+          effect: iam.Effect.ALLOW,
+        })
+      );
+    }
+
     inboundMessageFunction.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["connect:StartChatContact"],
@@ -346,29 +364,32 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
         memorySize: 512,
         environment: {
           CONTACT_TABLE: chatContactDdbTable.tableName,
-          PINPOINT_APPLICATION_ID: pinpointAppId,
+          PINPOINT_APPLICATION_ID: enableSMS ? pinpointAppId : "",
           FB_SECRET: fbSecretArn,
           WA_SECRET: waSecretArn,
           IN_SECRET: inSecretArn,
           ZALO_SECRET: zaloSecretArn,
           WECHAT_SECRET: wechatSecretArn,
-          SMS_NUMBER: smsNumber,
+          REDDIT_SECRET: redditSecretArn,
+          SMS_NUMBER: enableSMS ? smsNumber : "",
           DEBUG_LOG: debugLog.valueAsString,
         },
       }
     );
 
-    outboundMessageFunction.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ["mobiletargeting:SendMessages"],
-        effect: iam.Effect.ALLOW,
-        resources: [
-          `arn:aws:mobiletargeting:${this.region}:${
-            this.account
-          }:apps/${this.node.tryGetContext("pinpointAppId")}/messages`,
-        ],
-      })
-    );
+    if (enableSMS) {
+      outboundMessageFunction.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ["mobiletargeting:SendMessages"],
+          effect: iam.Effect.ALLOW,
+          resources: [
+            `arn:aws:mobiletargeting:${this.region}:${
+              this.account
+            }:apps/${this.node.tryGetContext("pinpointAppId")}/messages`,
+          ],
+        })
+      );
+    }
 
     if (enableFB) {
       outboundMessageFunction.addToRolePolicy(
@@ -418,6 +439,16 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
       );
     }
 
+    if(enableReddit){
+      outboundMessageFunction.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['secretsmanager:GetSecretValue'],
+          resources: [redditSecretArn],
+          effect: iam.Effect.ALLOW,
+        })
+      );
+    }
+
     outboundMessageFunction.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["dynamodb:GetItem", "dynamodb:DeleteItem"],
@@ -435,7 +466,7 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
     let digitalChannelHealthCheckIntegration: apigw2i.HttpLambdaIntegration;
     let digitalChannelApi;
 
-    if (enableFB || enableWhatsApp || enableInstagram || enableZalo || enableWeChat) {
+    if (enableFB || enableWhatsApp || enableInstagram || enableZalo || enableWeChat || enableReddit) {
       healthCheckFunction = new lambda.Function(this, "healthCheckFunction", {
         runtime: lambda.Runtime.NODEJS_18_X,
         handler: "index.handler",
@@ -449,6 +480,7 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
           IN_SECRET: inSecretArn,
           ZALO_SECRET: zaloSecretArn,
           WECHAT_SECRET: wechatSecretArn,
+          REDDIT_SECRET: redditSecretArn,
         },
       });
       if (enableFB) {
@@ -494,6 +526,16 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
           new iam.PolicyStatement({
             actions: ['secretsmanager:GetSecretValue'],
             resources: [wechatSecretArn],
+            effect: iam.Effect.ALLOW,
+          })
+        );
+      }
+
+      if(enableReddit){
+        healthCheckFunction.addToRolePolicy(
+          new iam.PolicyStatement({
+            actions: ['secretsmanager:GetSecretValue'],
+            resources: [redditSecretArn],
             effect: iam.Effect.ALLOW,
           })
         );
@@ -598,6 +640,22 @@ export class ChatMessageStreamingExamplesStack extends cdk.Stack {
         });
         new cdk.CfnOutput(this, 'WeChatApiGatewayWebhook', {
           value: digitalChannelApi.apiEndpoint.toString() + '/webhook/wechat',
+        });
+      }
+
+      if(enableReddit){
+        digitalChannelApi.addRoutes({
+          path: '/webhook/reddit',
+          methods: [apigw2.HttpMethod.POST],
+          integration: digitalChannelMessageIntegration,
+        });
+        digitalChannelApi.addRoutes({
+          path: '/webhook/reddit',
+          methods: [apigw2.HttpMethod.GET],
+          integration: digitalChannelHealthCheckIntegration,
+        });
+        new cdk.CfnOutput(this, 'RedditApiGatewayWebhook', {
+          value: digitalChannelApi.apiEndpoint.toString() + '/webhook/reddit',
         });
       }
 
